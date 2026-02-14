@@ -1,6 +1,6 @@
 import numpy as np
 
-from vnavslib import opticchiasm as oc
+from cvpipeline import opticchiasm as oc
 from ezcomms import vnavs_data as vdata
 
 vdata.DataAttribIntList._oc_module = oc

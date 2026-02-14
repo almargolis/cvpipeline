@@ -2,10 +2,10 @@ import time
 
 import numpy as np
 
-from vnavslib import image_filters
-from vnavslib import opticchiasm as oc
+from cvpipeline import image_filters
+from cvpipeline import opticchiasm as oc
 from ezcomms import vnavs_data as vdata
-from vnavsrun import cvpipeline
+from cvpipeline import cvpipeline
 
 
 # ---------------------------------------------------------------------------

@@ -12,9 +12,9 @@ import numpy as np
 from PIL import ImageTk, Image
 
 from eztk import eztk
-from vnavslib import image_analyzer
-from vnavslib import image_filters
-from vnavslib import opticchiasm as oc
+from cvpipeline import image_analyzer
+from cvpipeline import image_filters
+from cvpipeline import opticchiasm as oc
 from ezcomms import vnavs_const as vconst
 from ezcomms import vnavs_data as vdata
 from ezcomms import vnavs_file_xfer_client
@@ -30,7 +30,10 @@ from eztk.eztk import (
     RIGHT_COL,
     OVERLAY_COL,
 )
-from vnavsrun import cameraman
+try:
+    from vnavsrun import cameraman
+except ImportError:
+    cameraman = None
 
 BOT_1_MAP_TRANSPOSE = [
     [-1.30565584e-01, -1.56472861e00, 4.58333935e02],

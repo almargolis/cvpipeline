@@ -1,6 +1,6 @@
 import cv2
 
-from vnavslib import opticchiasm as oc
+from cvpipeline import opticchiasm as oc
 
 
 class MacbookCamera:
