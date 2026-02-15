@@ -745,6 +745,8 @@ class CvPipeline(vmqtt.VnavsNode):
             # existitng tabs, OnTabSelected() creates a default tab as soon as we delete the last one.
             # This is neater than the options for modifying OnTabSelected() behavior and may be slightly
             # more efficient.
+            if self.load_filter_name not in image_filters.ImageFilterCollection.image_filters:
+                raise KeyError(self.load_filter_name)
             self.load_new_filter_ct += 1
             print("ASSIGN", self.load_filter_name, self.load_new_filter_ct)
             if self.load_new_filter_ct <= len(ProcessStep.steps):
@@ -760,36 +762,51 @@ class CvPipeline(vmqtt.VnavsNode):
             self.load_filter_name = None
             self.load_parms = {}
 
-        # This needs error checking. Needs a mechanism for displaying errors to user.
-        # Parm values can be checked via GetParm()
-        f = open(fn, "r")
-        for ln in f:
-            ln = ln.strip()
-            if ln == "":
-                continue
-            print("LOAD", self.load_filter_name, ln)
-            if ln[0] == "/":
-                if self.load_filter_name is not None:
-                    AssignFilter()
-                self.load_filter_name = ln[1:]
-            else:
-                sep = ln.find("=")
-                if sep > 0:
-                    key = ln[:sep][5:]  # eliminate "parm." prefix
-                    value = ln[sep + 1 :]
-                    self.load_parms[key] = value
-        if self.load_filter_name is not None:
-            AssignFilter()
-        f.close()
-        while len(ProcessStep.steps) > self.load_new_filter_ct:
-            # The old process had more steps than the current, get rid of the old steps.
-            ix = len(ProcessStep.steps) - 1
-            print("XXXX", ix)
-            self.delete_process_step(ix)
-        self.source_widget.replace_value(
-            SRC_LOCAL_CAMERA
-        )  # temporary - needs more options
-        self.step_execution_needed = True
+        filter_line_num = 0
+        try:
+            f = open(fn, "r")
+            for line_num, ln in enumerate(f, 1):
+                ln = ln.strip()
+                if ln == "":
+                    continue
+                print("LOAD", self.load_filter_name, ln)
+                if ln[0] == "/":
+                    if self.load_filter_name is not None:
+                        AssignFilter()
+                    self.load_filter_name = ln[1:]
+                    filter_line_num = line_num
+                else:
+                    sep = ln.find("=")
+                    if sep > 0:
+                        key = ln[:sep][5:]  # eliminate "parm." prefix
+                        value = ln[sep + 1 :]
+                        self.load_parms[key] = value
+            if self.load_filter_name is not None:
+                AssignFilter()
+            f.close()
+            while len(ProcessStep.steps) > self.load_new_filter_ct:
+                # The old process had more steps than the current, get rid of the old steps.
+                ix = len(ProcessStep.steps) - 1
+                print("XXXX", ix)
+                self.delete_process_step(ix)
+            self.source_widget.replace_value(
+                SRC_LOCAL_CAMERA
+            )  # temporary - needs more options
+            self.step_execution_needed = True
+        except KeyError:
+            msg = f"Unknown filter '{self.load_filter_name}' at line {filter_line_num}"
+            print(msg)
+            if ProcessStep.steps:
+                ProcessStep.steps[0].deposition.replace_value(msg)
+                ProcessStep.steps[0].select_tab(None)
+            self.execution_halted = True
+        except Exception:
+            trace = traceback.format_exc()
+            print(trace)
+            if ProcessStep.steps:
+                ProcessStep.steps[0].deposition.replace_value(trace)
+                ProcessStep.steps[0].select_tab(None)
+            self.execution_halted = True
         self.loading = False
 
     def save_process_file(self):
