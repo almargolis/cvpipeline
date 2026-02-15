@@ -20,5 +20,8 @@ dependencies = [
     "Pillow>=8.0.0",
 ]
 
+[project.scripts]
+cvpipeline = "cvpipeline.cvpipeline:main"
+
 [tool.setuptools.packages.find]
 include = ["cvpipeline*"]

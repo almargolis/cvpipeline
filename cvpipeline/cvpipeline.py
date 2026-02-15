@@ -969,6 +969,10 @@ class CvPipeline(vmqtt.VnavsNode):
         # when tk is destroyed by close window, self.disconnect()	# stop mqtt client loop
 
 
-if __name__ == "__main__":
+def main():
     m = CvPipeline()
     m.main_loop()
+
+
+if __name__ == "__main__":
+    main()
