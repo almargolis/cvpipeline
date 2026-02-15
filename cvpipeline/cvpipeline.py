@@ -30,10 +30,7 @@ from eztk.eztk import (
     RIGHT_COL,
     OVERLAY_COL,
 )
-try:
-    from vnavsrun import cameraman
-except ImportError:
-    cameraman = None
+from cvpipeline import macbookcamera
 
 BOT_1_MAP_TRANSPOSE = [
     [-1.30565584e-01, -1.56472861e00, 4.58333935e02],
@@ -94,7 +91,7 @@ class ProcessStep:
     imports.append(("cv2", cv2, None))
     imports.append(("np", np, "numpy"))
     imports.append(("oc", oc, "oc"))
-    imports.append(("cameraman", None, None))
+    imports.append(("macbookcamera", None, None))
 
     def __init__(self, filter_name=None, where=None, parms={}):
         self.ix = len(self.steps)
@@ -354,7 +351,7 @@ class ProcessStep:
         f.write("\n")
         source_path = cls.steps[0].source_path
         if source_path is None:
-            f.write("cam = cameraman.MacbookCamera()\n")
+            f.write("cam = macbookcamera.MacbookCamera()\n")
             f.write("im_in = cam.capture_image()\n")
         else:
             f.write(f'im_in = oc.Image("opencv_fn={source_path}")\n')
@@ -827,7 +824,7 @@ class CvPipeline(vmqtt.VnavsNode):
     def on_select_source(self, *args):
         self.pic_source = self.source_widget.value()
         if self.pic_source == SRC_LOCAL_CAMERA:
-            self.local_cam = cameraman.MacbookCamera()
+            self.local_cam = macbookcamera.MacbookCamera()
         elif self.pic_source == SRC_BOT_CAMERA:
             self.connect_to_mqtt_server()
 
