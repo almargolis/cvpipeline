@@ -152,7 +152,10 @@ class ProcessStep:
             on_click=self.on_image_click, rowspan=2
         )
         self.execution_time = self.output_panel.add_label(row=FIRST_ROW, col=NEXT_COL)
-        self.deposition = self.output_panel.add_label(row=NEXT_ROW, col=SAME_COL)
+        self.deposition = self.output_panel.add_scrolled_entry_field(
+            "Errors", width=40, height=6, row=NEXT_ROW, col=SAME_COL
+        )
+        self.deposition.tkw.config(state="disabled", foreground="red")
         self.thumbnail = self.app.thumbnail_frame.add_label_image(
             thumbnailof=self.image_widget, row=0, col=NEXT_COL
         )
@@ -506,8 +509,7 @@ class ProcessStep:
         self.exec_im = None
         self.exec_objects = None
         self.exec_rect = None
-        deposition = ""
-        self.deposition.replace_value(deposition)
+        self.deposition.replace_value("")
         exec_code_str = self.get_code_str(script=False)
         if exec_code_str != "":
             # print("EXEC", exec_code_str)
@@ -525,8 +527,10 @@ class ProcessStep:
         # Step code has been executed, now update step tab to show results.
         #
         if trace is not None:
-            deposition = trace + "\n\n" + deposition
+            deposition = f"Step {self.ix}: {self.tab_title}\n{trace}"
             self.deposition.replace_value(deposition)
+        else:
+            self.deposition.replace_value("")
         if image_filters.FLAG_SLIDERS in self.cv_specs.flags:
             self.clear_info()
             self.add_info_sliders()
