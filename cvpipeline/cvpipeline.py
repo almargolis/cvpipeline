@@ -509,7 +509,6 @@ class ProcessStep:
         self.exec_im = None
         self.exec_objects = None
         self.exec_rect = None
-        self.deposition.replace_value("")
         exec_code_str = self.get_code_str(script=False)
         if exec_code_str != "":
             # print("EXEC", exec_code_str)
@@ -529,6 +528,11 @@ class ProcessStep:
         if trace is not None:
             deposition = f"Step {self.ix}: {self.tab_title}\n{trace}"
             self.deposition.replace_value(deposition)
+            if self.app is not None:
+                self.select_tab(None)
+                self.app.step_execution_needed = False
+                self.app.execution_halted = True
+                self.app.pic_continuous = False
         else:
             self.deposition.replace_value("")
         if image_filters.FLAG_SLIDERS in self.cv_specs.flags:
@@ -559,6 +563,7 @@ class CvPipeline(vmqtt.VnavsNode):
         "camera_shutter_speed",
         "delete_process_step_ix",
         "download_dir",
+        "execution_halted",
         "file_client",
         "gui_update_mode",
         "image",
@@ -614,6 +619,7 @@ class CvPipeline(vmqtt.VnavsNode):
         self.load_new_filter_ct = 0
         self.loading = False
         self.step_execution_needed = False
+        self.execution_halted = False
 
         self.image = image_analyzer.ImageAnalyzer()
         self.image.img_crop = (300, 200)
@@ -814,6 +820,7 @@ class CvPipeline(vmqtt.VnavsNode):
         self.configure_camera()  # we don't wait for this to take effect
 
     def on_continuous_image(self):
+        self.execution_halted = False
         self.pic_continuous = True
         if self.source_widget.value() is None:
             self.source_widget.replace_value(SRC_LOCAL_CAMERA)
@@ -956,13 +963,13 @@ class CvPipeline(vmqtt.VnavsNode):
                     shutter_speed=shutter_speed,
                     colorcode=colorcode,
                 )
-        if (not self.pic_continuous) and ((time.time() - self.last_process_time) > 0.1):
+        if (not self.pic_continuous) and (not self.execution_halted) and ((time.time() - self.last_process_time) > 0.1):
             # We don't want to process the image on every pass of the loop because that can use too many CPU
             # cycles and make the system laggy. In continuous mode, we update frequently with each new image.
             # When in single capture mode, we need to update periodically so reflect the user updating
             # controls. Especially sliders.
             self.step_execution_needed = True
-        if self.step_execution_needed:
+        if self.step_execution_needed and not self.execution_halted:
             ProcessStep.execute_all_steps()
             self.step_execution_needed = False
             self.last_process_time = time.time()

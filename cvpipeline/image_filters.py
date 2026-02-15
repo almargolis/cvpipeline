@@ -323,7 +323,7 @@ image_filter = ImageFilter(
 image_filter.annotate_code = (
     "{x_output_annotated} = im_base.copy()\n"
     + "{x_output_annotated}.draw_rectangle(r, color=oc.DRAW_BGR_GREEN, thickness=2)\n"
-    + 'xstep.SetInfo(0, "Hue", im_base.crop(r).average_hue())\n'
+    + 'xstep.set_info(0, "Hue", im_base.crop(r).average_hue())\n'
 )
 
 image_filter = ImageFilter(
