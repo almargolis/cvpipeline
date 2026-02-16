@@ -8,6 +8,10 @@ import importlib
 import os, cv2, numpy as np
 import math
 import time
+import subprocess
+import json
+import glob as glob_mod
+import struct
 
 # from scipy import weave
 from operator import itemgetter
@@ -508,6 +512,259 @@ def object_as_dict(src):
     for this in src.__slots__:
         res[this] = getattr(src, this)
     return res
+
+
+class CameraInfo:
+    __slots__ = (
+        "device_id", "name", "unique_id", "driver", "bus_info",
+        "position", "is_builtin", "model_id", "resolutions", "device_path",
+    )
+
+    def __init__(self, device_id=-1, name="", unique_id="", driver="",
+                 bus_info="", position="unknown", is_builtin=False,
+                 model_id="", resolutions=None, device_path=""):
+        self.device_id = device_id
+        self.name = name
+        self.unique_id = unique_id
+        self.driver = driver
+        self.bus_info = bus_info
+        self.position = position
+        self.is_builtin = is_builtin
+        self.model_id = model_id
+        self.resolutions = resolutions if resolutions is not None else []
+        self.device_path = device_path
+
+    def __repr__(self):
+        return (
+            "CameraInfo(device_id={}, name={!r}, position={!r}, "
+            "is_builtin={})".format(
+                self.device_id, self.name, self.position, self.is_builtin)
+        )
+
+
+def list_cameras():
+    """Discover available cameras and return a list of CameraInfo objects."""
+    if sys.platform == "darwin":
+        cameras = _list_cameras_macos_avf()
+        if cameras is None:
+            cameras = _list_cameras_macos_profiler()
+    elif sys.platform.startswith("linux"):
+        cameras = _list_cameras_linux_v4l2()
+    else:
+        cameras = None
+
+    if cameras is None:
+        cameras = _list_cameras_opencv_fallback()
+    return cameras
+
+
+def _list_cameras_macos_avf():
+    """Enumerate cameras via AVFoundation (requires pyobjc)."""
+    try:
+        import AVFoundation
+    except ImportError:
+        return None
+
+    devices = AVFoundation.AVCaptureDevice.devicesWithMediaType_(
+        AVFoundation.AVMediaTypeVideo
+    )
+    if not devices:
+        return []
+
+    cameras = []
+    for idx, dev in enumerate(devices):
+        cam = CameraInfo(device_id=idx)
+        cam.name = str(dev.localizedName())
+        cam.unique_id = str(dev.uniqueID())
+        cam.model_id = str(dev.modelID()) if dev.modelID() else ""
+        cam.driver = "AVFoundation"
+
+        pos = dev.position()
+        # AVCaptureDevicePositionFront=2, Back=1, Unspecified=0
+        if pos == 2:
+            cam.position = "front"
+            cam.is_builtin = True
+        elif pos == 1:
+            cam.position = "back"
+            cam.is_builtin = True
+        else:
+            name_lower = cam.name.lower()
+            if "facetime" in name_lower or "isight" in name_lower:
+                cam.is_builtin = True
+                cam.position = "front"
+            else:
+                cam.position = "external"
+
+        resolutions = []
+        for fmt in dev.formats():
+            desc = fmt.formatDescription()
+            dims = AVFoundation.CMVideoFormatDescriptionGetDimensions(desc)
+            res = (dims.width, dims.height)
+            if res not in resolutions:
+                resolutions.append(res)
+        cam.resolutions = resolutions
+
+        cameras.append(cam)
+    return cameras
+
+
+def _list_cameras_macos_profiler():
+    """Enumerate cameras via system_profiler (no extra deps)."""
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPCameraDataType", "-json"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout)
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
+        return None
+
+    sp_cameras = data.get("SPCameraDataType", [])
+    if not sp_cameras:
+        return None
+
+    cameras = []
+    for idx, entry in enumerate(sp_cameras):
+        cam = CameraInfo(device_id=idx)
+        cam.name = entry.get("_name", "")
+        cam.unique_id = entry.get("spcamera_unique-id", "")
+        cam.model_id = entry.get("spcamera_model-id", "")
+        cam.driver = "system_profiler"
+
+        name_lower = cam.name.lower()
+        if "facetime" in name_lower or "isight" in name_lower:
+            cam.is_builtin = True
+            cam.position = "front"
+        else:
+            cam.position = "external"
+
+        cameras.append(cam)
+    return cameras
+
+
+def _list_cameras_linux_v4l2():
+    """Enumerate V4L2 capture devices on Linux."""
+    import fcntl
+
+    VIDIOC_QUERYCAP = 0x80685600
+    VIDIOC_ENUM_FMT = 0xC0405602
+    VIDIOC_ENUM_FRAMESIZES = 0xC02C5A4A
+    V4L2_CAP_VIDEO_CAPTURE = 0x00000001
+    V4L2_FRMSIZE_TYPE_DISCRETE = 1
+
+    video_paths = sorted(glob_mod.glob("/dev/video*"))
+    if not video_paths:
+        return None
+
+    cameras = []
+    for path in video_paths:
+        try:
+            fd = os.open(path, os.O_RDWR | os.O_NONBLOCK)
+        except OSError:
+            continue
+        try:
+            # VIDIOC_QUERYCAP: 16s 32s 32s 4I = 16+32+32+16 = 96 bytes reserved,
+            # then capabilities field
+            buf = bytearray(104)
+            try:
+                fcntl.ioctl(fd, VIDIOC_QUERYCAP, buf)
+            except OSError:
+                continue
+
+            driver = buf[0:16].split(b'\x00', 1)[0].decode("utf-8", "replace")
+            card = buf[16:48].split(b'\x00', 1)[0].decode("utf-8", "replace")
+            bus = buf[48:80].split(b'\x00', 1)[0].decode("utf-8", "replace")
+            caps = struct.unpack_from("<I", buf, 84)[0]
+            # device_caps at offset 88 if V4L2_CAP_DEVICE_CAPS is set
+            if caps & 0x80000000:  # V4L2_CAP_DEVICE_CAPS
+                dev_caps = struct.unpack_from("<I", buf, 88)[0]
+            else:
+                dev_caps = caps
+
+            if not (dev_caps & V4L2_CAP_VIDEO_CAPTURE):
+                continue
+
+            dev_num_match = re.search(r'(\d+)$', path)
+            dev_id = int(dev_num_match.group(1)) if dev_num_match else -1
+
+            cam = CameraInfo(device_id=dev_id)
+            cam.name = card
+            cam.driver = driver
+            cam.bus_info = bus
+            cam.device_path = path
+            cam.unique_id = bus if bus else path
+
+            name_lower = card.lower()
+            if "integrated" in name_lower or "built-in" in name_lower:
+                cam.is_builtin = True
+                cam.position = "front"
+            else:
+                cam.position = "external"
+
+            # Enumerate supported resolutions
+            resolutions = []
+            for fmt_idx in range(64):
+                fmt_buf = bytearray(64)
+                struct.pack_into("<II", fmt_buf, 0, fmt_idx, 1)  # index, type=VIDEO_CAPTURE
+                try:
+                    fcntl.ioctl(fd, VIDIOC_ENUM_FMT, fmt_buf)
+                except OSError:
+                    break
+                pix_fmt = struct.unpack_from("<I", fmt_buf, 8)[0]
+
+                for size_idx in range(256):
+                    size_buf = bytearray(44)
+                    struct.pack_into("<II", size_buf, 0, size_idx, pix_fmt)
+                    try:
+                        fcntl.ioctl(fd, VIDIOC_ENUM_FRAMESIZES, size_buf)
+                    except OSError:
+                        break
+                    ftype = struct.unpack_from("<I", size_buf, 8)[0]
+                    if ftype == V4L2_FRMSIZE_TYPE_DISCRETE:
+                        w = struct.unpack_from("<I", size_buf, 12)[0]
+                        h = struct.unpack_from("<I", size_buf, 16)[0]
+                        res = (w, h)
+                        if res not in resolutions:
+                            resolutions.append(res)
+                    else:
+                        # stepwise/continuous - grab min and max
+                        w_min = struct.unpack_from("<I", size_buf, 12)[0]
+                        h_min = struct.unpack_from("<I", size_buf, 16)[0]
+                        w_max = struct.unpack_from("<I", size_buf, 20)[0]
+                        h_max = struct.unpack_from("<I", size_buf, 24)[0]
+                        for res in [(w_min, h_min), (w_max, h_max)]:
+                            if res not in resolutions:
+                                resolutions.append(res)
+                        break
+            cam.resolutions = resolutions
+
+            cameras.append(cam)
+        finally:
+            os.close(fd)
+
+    return cameras if cameras else None
+
+
+def _list_cameras_opencv_fallback():
+    """Probe OpenCV indices 0-9 as a last resort."""
+    cameras = []
+    for idx in range(10):
+        cap = cv2.VideoCapture(idx)
+        if cap.isOpened():
+            cam = CameraInfo(device_id=idx)
+            cam.name = "Camera {}".format(idx)
+            cam.driver = "opencv"
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            if w > 0 and h > 0:
+                cam.resolutions = [(w, h)]
+            cap.release()
+            cameras.append(cam)
+        else:
+            cap.release()
+    return cameras
 
 
 class RotatedRect:
