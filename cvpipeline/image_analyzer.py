@@ -101,7 +101,7 @@ class ImageAnalyzer:
         elif self.img_canny_method == 2:
             # based on pyimagesearch method
             canny_image = cv2.Canny(bw_image, 30, 200)
-        (imgxx, opencv_contours, hierarchy) = cv2.findContours(
+        (opencv_contours, hierarchy) = cv2.findContours(
             canny_image.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
         )
         print("Contour Ct:", len(opencv_contours))

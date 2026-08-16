@@ -325,7 +325,7 @@ class Image:
         # print("find_color_blobs() Cropped " + repr_opencv(im_masked))
         kernel = np.ones((kernel_dim, kernel_dim), np.uint8)
         im_dilated = cv2.dilate(im_masked, kernel, iterations=iterations)
-        cont2, contours, hierarchy = cv2.findContours(
+        contours, hierarchy = cv2.findContours(
             im_dilated.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
         )
         rotated_rect_list = contours_extract(
@@ -341,7 +341,7 @@ class Image:
                 im_hsv, mask=im_masked, rect=rotated_rect_list[0]
             )
             if rect is not None:
-                for this in rotatated_rect_list:  # adjust to original image coordinates
+                for this in rotated_rect_list:  # adjust to original image coordinates
                     this.center_x += rect.x_min
                     this.center_y += rect.y_min
         print("find_color_blobs()", rotated_rect_list)
@@ -792,7 +792,7 @@ class RotatedRect:
         return cv2.boxPoints(self.as_rotated_rect()).tolist()  # returns array of 4 [x, y]
 
     def as_rotated_rect(self):
-        return [[self.center_x, self.center_y], [self.width, self.height], angle]
+        return [[self.center_x, self.center_y], [self.width, self.height], self.angle]
 
     def top_y(self, x):
         # This is incomplete. Need to consider angle.
