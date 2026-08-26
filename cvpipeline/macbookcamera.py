@@ -1,3 +1,5 @@
+import sys
+
 import cv2
 
 from cvpipeline import opticchiasm as oc
@@ -36,6 +38,16 @@ class MacbookCamera:
             self._video = cv2.VideoCapture(self.device_id)
             self._video.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
             self._video.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
+        if not self._video.isOpened():
+            msg = "MacbookCamera: unable to open camera {}.".format(self.device_id)
+            if sys.platform.startswith("linux"):
+                msg += (
+                    "\nOn Linux this is usually a permissions issue: your user"
+                    " must be in the 'video' group.\n"
+                    "  sudo usermod -aG video $USER\n"
+                    "Then log out and back in for it to take effect."
+                )
+            print(msg)
 
     @property
     def exposure_speed(self):
@@ -84,6 +96,8 @@ class MacbookCamera:
 
     def capture_image(self):
         ret, frame = self.read()
+        if frame is None:
+            return None
         return oc.Image(im=frame, colorcode=oc.IM_BGR)
 
     def capture_continuous(

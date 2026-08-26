@@ -4,6 +4,10 @@ OpenCV vision pipeline and filter system extracted from the VNAVS robotics frame
 
 Provides chainable image filters, color space tracking, geometry primitives, and a Tkinter-based GUI editor for building computer vision pipelines.
 
+## First run: missing config file
+
+`cvpipeline` connects via `ezcomms`, which requires a `~/vnavs.ini` config file. On a fresh install this file doesn't exist yet, so the first run of `cvpipeline` will fail with a message telling you to create it. See the [ezcomms README](https://github.com/almargolis/ezcomms#config-file-vnavsini) for how to generate it.
+
 ## Process Scripts
 
 Setting up a filter pipeline takes time, and you may need to rebuild the same pipeline repeatedly. The GUI has **Open Process** and **Save Process** buttons to save and reload pipelines as `.cvp` script files.

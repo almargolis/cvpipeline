@@ -4,6 +4,7 @@ import os
 import sys
 import threading
 import time
+import tkinter
 import traceback
 import types
 
@@ -498,8 +499,12 @@ class ProcessStep:
                     print("ExecuteStep()", self.ix, self.tab_title)
                     # raise
             else:
-                this[0].replace_value("")
-                this[1].replace_value("")
+                try:
+                    this[0].replace_value("")
+                    this[1].replace_value("")
+                except:
+                    # tried to execute deleted step
+                    print("ExecuteStep()", self.ix, self.tab_title)
 
         trace = None
         self.exec_annotated = None
@@ -527,14 +532,22 @@ class ProcessStep:
         #
         if trace is not None:
             deposition = f"Step {self.ix}: {self.tab_title}\n{trace}"
-            self.deposition.replace_value(deposition)
+            try:
+                self.deposition.replace_value(deposition)
+            except:
+                # tried to execute deleted step
+                print("ExecuteStep()", self.ix, self.tab_title)
             if self.app is not None:
                 self.select_tab(None)
                 self.app.step_execution_needed = False
                 self.app.execution_halted = True
                 self.app.pic_continuous = False
         else:
-            self.deposition.replace_value("")
+            try:
+                self.deposition.replace_value("")
+            except:
+                # tried to execute deleted step
+                print("ExecuteStep()", self.ix, self.tab_title)
         if image_filters.FLAG_SLIDERS in self.cv_specs.flags:
             self.clear_info()
             self.add_info_sliders()
@@ -634,6 +647,17 @@ class CvPipeline(vmqtt.VnavsNode):
         self.gui_update_mode = True
         self.tk = eztk.EasyTk()
         self.tk.tkw.title("VNAVS OpenCV Visualizer")
+        try:
+            # The window's natural size isn't known until tabs/thumbnails are
+            # added after startup, and some Linux window managers don't
+            # auto-grow the window to fit, leaving it clipped until manually
+            # maximized. Start maximized to avoid that.
+            self.tk.tkw.state("zoomed")
+        except tkinter.TclError:
+            try:
+                self.tk.tkw.attributes("-zoomed", True)
+            except tkinter.TclError:
+                pass
         self.status_frame = self.tk.add_label_frame("Status", row=1)
         self.thumbnail_frame = self.tk.add_label_frame("Thumbnails", row=2)
         self.notebook = self.tk.add_notebook(row=3, on_tab_selected=self.on_tab_selected)
@@ -906,7 +930,8 @@ class CvPipeline(vmqtt.VnavsNode):
             self.notebook.tkw.tab(this_step.ix, text=this_step.tab_title)
         self.step_execution_needed = True
         self.gui_update_mode = False
-        ProcessStep.steps[ix - 1].select_tab(None)
+        if ProcessStep.steps:
+            ProcessStep.steps[max(ix - 1, 0)].select_tab(None)
         print("cvpipeline.DeleteProcessStep() END", len(ProcessStep.steps))
 
     #
