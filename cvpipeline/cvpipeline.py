@@ -986,7 +986,9 @@ class CvPipeline(vmqtt.VnavsNode):
                     self.pic_fn = payload["filename"]
                     path = os.path.join(self.download_dir, self.pic_fn)
                     # print("DoLoop() GetFile: ", path)
-                    if not self.file_client.get_file("i", self.pic_fn, path=path):
+                    if not self.file_client.get_file(
+                        "i", self.pic_fn, path=path, timeout=5.0
+                    ):
                         print("Unable to fetch PIC", self.pic_fn)
                         return
                     self.last_pic_time = time.time()
