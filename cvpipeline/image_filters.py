@@ -42,7 +42,13 @@ FLAG_SLIDERS = "sliders"
 # 	xstep is the current ProcessStep() with exec_im set to None.
 #
 ImageFilter(
-    FILTER_NAME_IMAGE, "{x_output_im} = xstep.source_im.copy()", [], flags=[FLAG_ISBASE]
+    FILTER_NAME_IMAGE,
+    "{x_output_im} = xstep.source_im.copy()",
+    [
+        vdata.DataAttribInt("max_width", "0", min_value=0, max_value=4096),
+        vdata.DataAttribInt("max_height", "0", min_value=0, max_value=4096),
+    ],
+    flags=[FLAG_ISBASE],
 )
 
 ImageFilter(

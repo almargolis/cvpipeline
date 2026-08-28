@@ -986,8 +986,21 @@ class CvPipeline(vmqtt.VnavsNode):
                     self.pic_fn = payload["filename"]
                     path = os.path.join(self.download_dir, self.pic_fn)
                     # print("DoLoop() GetFile: ", path)
+                    max_w = 0
+                    max_h = 0
+                    if ProcessStep.steps:
+                        pv = ProcessStep.steps[0].parm_values
+                        try:
+                            max_w = int(pv.get("Image_max_width", 0))
+                        except (ValueError, TypeError):
+                            max_w = 0
+                        try:
+                            max_h = int(pv.get("Image_max_height", 0))
+                        except (ValueError, TypeError):
+                            max_h = 0
                     if not self.file_client.get_file(
-                        "i", self.pic_fn, path=path, timeout=5.0
+                        "i", self.pic_fn, path=path, timeout=5.0,
+                        max_width=max_w, max_height=max_h,
                     ):
                         print("Unable to fetch PIC", self.pic_fn)
                         return
