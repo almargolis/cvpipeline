@@ -338,7 +338,7 @@ class Image:
         if (rotated_rect_list is not None) and (len(rotated_rect_list) > 0):
             # use im_masked because im_dilated includes out of range hsv values
             next_hsv_spec = next_hsv_spec_fn(
-                im_hsv, mask=im_masked, rect=rotated_rect_list[0]
+                im_hsv, mask=im_masked, rotated_rect=rotated_rect_list[0]
             )
             if rect is not None:
                 for this in rotated_rect_list:  # adjust to original image coordinates
