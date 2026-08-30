@@ -652,3 +652,37 @@ def test_cvp_parse_empty_lines_skipped(tmp_path):
     assert len(filters) == 2
     assert filters[0][0] == "FilterA"
     assert filters[1][0] == "FilterB"
+
+
+# --- find_color_blobs open_dim (speckle removal) ------------------------
+
+
+def _white_bar_image_with_speck():
+    """30x30 BGR: a 6px-wide vertical white bar plus one isolated 3x3 speck."""
+    arr = np.zeros((30, 30, 3), dtype=np.uint8)
+    arr[:, 12:18] = 255  # continuous white bar
+    arr[2:5, 2:5] = 255  # isolated speckle, far from the bar
+    return oc.Image(im=arr, colorcode="BGR")
+
+
+def _white_spec():
+    return oc.HsvSpec(
+        hue=0, huerange=179, saturation=0, saturationrange=80,
+        value=255, valuerange=120,
+    )
+
+
+def test_find_color_blobs_keeps_speck_without_open():
+    im = _white_bar_image_with_speck()
+    rects, _ = im.find_color_blobs(
+        _white_spec(), kernel_dim=1, minimum_blob_area=1
+    )
+    assert len(rects) == 2
+
+
+def test_find_color_blobs_open_dim_removes_speck():
+    im = _white_bar_image_with_speck()
+    rects, _ = im.find_color_blobs(
+        _white_spec(), kernel_dim=1, minimum_blob_area=1, open_dim=5
+    )
+    assert len(rects) == 1  # the bar survives, the 3x3 speck is opened away

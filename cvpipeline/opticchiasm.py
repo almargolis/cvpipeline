@@ -226,7 +226,14 @@ class Image:
         return right_rect_from_symbolic_pp(self._im, p1, p2)
 
     def chase_line(
-        self, hsvspec, rect, end_y=0, sliceheight=20, kernel_dim=3, iterations=1
+        self,
+        hsvspec,
+        rect,
+        end_y=0,
+        sliceheight=20,
+        kernel_dim=3,
+        iterations=1,
+        open_dim=0,
     ):
         # don't modify source specs, make a working copy to step through
         if (hsvspec is None) or (rect is None):
@@ -253,6 +260,7 @@ class Image:
                 iterations=iterations,
                 minimum_blob_area=min_blob_area,
                 maximum_ct_of_rects_wanted=1,
+                open_dim=open_dim,
             )
             if (blobs is None) or (len(blobs) < 1):
                 return None, None
@@ -314,6 +322,7 @@ class Image:
         iterations=1,
         minimum_blob_area=1,
         maximum_ct_of_rects_wanted=3,
+        open_dim=0,
     ):
         # print("find_color_blobs()", self, rect, hsvspec)
         if rect is None:
@@ -323,6 +332,12 @@ class Image:
         im_hsv = im_cropped.im_as_hsv()
         im_masked = color_mask_one_hue(im_hsv, hsvspec)
         # print("find_color_blobs() Cropped " + repr_opencv(im_masked))
+        if open_dim and open_dim > 1:
+            # Morphological opening (erode then dilate): drop isolated speckle
+            # smaller than open_dim before the line-bridging dilate below.
+            # Keep open_dim < the thinnest part of the real line.
+            open_kernel = np.ones((open_dim, open_dim), np.uint8)
+            im_masked = cv2.morphologyEx(im_masked, cv2.MORPH_OPEN, open_kernel)
         kernel = np.ones((kernel_dim, kernel_dim), np.uint8)
         im_dilated = cv2.dilate(im_masked, kernel, iterations=iterations)
         contours, hierarchy = cv2.findContours(
