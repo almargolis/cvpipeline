@@ -234,7 +234,12 @@ class Image:
         kernel_dim=3,
         iterations=1,
         open_dim=0,
+        adapt=True,
     ):
+        # adapt=True re-samples the target colour from each slice as it climbs
+        # (good for a lighting gradient, bad if a slice grabs background -- the
+        # spec then drifts and detection wanders). adapt=False keeps the given
+        # spec fixed for the whole climb.
         # don't modify source specs, make a working copy to step through
         if (hsvspec is None) or (rect is None):
             return None
@@ -305,7 +310,7 @@ class Image:
             else:
                 missing_slices = 0
                 line_points.append(this_segment)
-            if this_hsvspec is not None:
+            if adapt and (this_hsvspec is not None):
                 line_hsvspec = this_hsvspec
             if (missing_slices > max_missing) or (not AdvanceLineSearch(this_segment)):
                 # Missing_slices image_filters for reasonably continuous lines.
