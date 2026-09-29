@@ -255,6 +255,8 @@ class ProcessStep:
     @classmethod
     def execute_all_steps(cls):
         for this_step in cls.steps:
+            if cls.app is not None and cls.app.execution_halted:
+                break
             this_step.execute_step()
 
     def save_parameters(self):
@@ -514,6 +516,24 @@ class ProcessStep:
         self.exec_im = None
         self.exec_objects = None
         self.exec_rect = None
+        no_image = (
+            (self.cv_filter_name == image_filters.FILTER_NAME_IMAGE and self.source_im is None)
+            or (self.cv_filter_name != image_filters.FILTER_NAME_IMAGE and latest_im is None)
+        )
+        if no_image:
+            msg = "No image found."
+            if self.app is not None and self.app.pic_source == SRC_BOT_CAMERA:
+                msg += "\nBot not connected."
+            try:
+                self.deposition.replace_value(msg)
+            except:
+                print("ExecuteStep()", self.ix, self.tab_title)
+            if self.app is not None:
+                self.select_tab(None)
+                self.app.step_execution_needed = False
+                self.app.execution_halted = True
+                self.app.pic_continuous = False
+            return
         exec_code_str = self.get_code_str(script=False)
         if exec_code_str != "":
             # print("EXEC", exec_code_str)
@@ -878,6 +898,7 @@ class CvPipeline(vmqtt.VnavsNode):
         if self.pic_source == SRC_LOCAL_CAMERA:
             self.local_cam = macbookcamera.MacbookCamera()
         elif self.pic_source == SRC_BOT_CAMERA:
+            self.automatically_connect = True
             self.connect_to_mqtt_server()
 
     def on_tab_selected(self, x):
