@@ -77,6 +77,8 @@ class ProcessStep:
         "thumbnail",
         "use_annotation",
         "use_objects",
+        "zoom_canvas",
+        "zoom_info",
         "zoom_popup",
     )
     app = None
@@ -105,6 +107,8 @@ class ProcessStep:
         self.tab = self.app.notebook.add_tab(self.tab_title, where=where)
         self.input_panel = self.tab.add_label_frame("Input")
         self.output_panel = self.tab.add_label_frame("Output")
+        self.zoom_canvas = None
+        self.zoom_info = None
         self.zoom_popup = None
         #
         # input_panel
@@ -244,13 +248,39 @@ class ProcessStep:
             self.point_target = None
             return
         # Default action: pop-up a window with a larger image.
-        print("ZOOM IM", self.exec_im.__class__.__name__)
+        if self.exec_im is None:
+            return
         self.exec_im.write("zoom.jpeg")
         # Reference to popup must be maintained or image gets lost in garbage collection.
         self.zoom_popup = self.app.tk.make_popup_window(self.cv_filter_name)
-        self.zoom_popup.add_label("Sum Thing")
-        canvas = self.zoom_popup.add_canvas(width=800, height=400)
-        canvas.update_image(pil_fn="zoom.jpeg")
+        self.zoom_info = self.zoom_popup.add_label("Click image for x,y and HSV")
+        self.zoom_canvas = self.zoom_popup.add_canvas(
+            width=800, height=400, on_click=self.on_zoom_click
+        )
+        self.zoom_canvas.update_image(pil_fn="zoom.jpeg")
+
+    def on_zoom_click(self, event):
+        if self.exec_im is None or self.zoom_canvas is None:
+            return
+        x = self.zoom_canvas.tkw.canvasx(event.x)
+        y = self.zoom_canvas.tkw.canvasy(event.y)
+        if self.zoom_canvas.pil_resize_ratio is not None:
+            x = int(x / self.zoom_canvas.pil_resize_ratio)
+            y = int(y / self.zoom_canvas.pil_resize_ratio)
+        else:
+            x = int(x)
+            y = int(y)
+        if x < 0 or x >= self.exec_im.width or y < 0 or y >= self.exec_im.height:
+            return
+        pixel = self.exec_im.im[y, x]
+        if len(self.exec_im.im.shape) == 2:
+            self.zoom_info.replace_value(f"x={x}  y={y}  val={pixel}")
+        else:
+            hsv_im = self.exec_im.im_as_hsv()
+            hsv_pixel = hsv_im[y, x]
+            self.zoom_info.replace_value(
+                f"x={x}  y={y}  H={hsv_pixel[0]}  S={hsv_pixel[1]}  V={hsv_pixel[2]}"
+            )
 
     @classmethod
     def execute_all_steps(cls):
