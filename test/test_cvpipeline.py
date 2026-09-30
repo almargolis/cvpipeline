@@ -6,6 +6,7 @@ from cvpipeline import image_filters
 from cvpipeline import opticchiasm as oc
 from ezcomms import vnavs_data as vdata
 from cvpipeline import cvpipeline
+from cvpipeline import processsteps
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +55,7 @@ _PROCESS_STEP_SLOT_DEFAULTS = {
     "parm_widgets": [],
     "parm_values": {},
     "parms_specs": [],
+    "pipeline_step": None,
     "point_target": None,
     "source_im": None,
     "source_path": None,
@@ -82,6 +84,14 @@ def make_process_step(**overrides):
     defaults.update(overrides)
     for attr, val in defaults.items():
         setattr(ps, attr, val)
+    # Create a matching PipelineStep if not already provided
+    if ps.pipeline_step is None:
+        ps.pipeline_step = processsteps.PipelineStep(
+            parms=ps.parm_values, ix=ps.ix
+        )
+        ps.pipeline_step.cv_filter_name = ps.cv_filter_name
+        ps.pipeline_step.cv_specs = ps.cv_specs
+        ps.pipeline_step.parms_specs = ps.parms_specs
     return ps
 
 

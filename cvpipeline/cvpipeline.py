@@ -33,6 +33,7 @@ from eztk.eztk import (
     OVERLAY_COL,
 )
 from cvpipeline import macbookcamera
+from cvpipeline import processsteps
 
 BOT_1_MAP_TRANSPOSE = [
     [-1.30565584e-01, -1.56472861e00, 4.58333935e02],
@@ -44,7 +45,7 @@ BOT_1_H = np.array(BOT_1_MAP_TRANSPOSE, dtype="float32")
 
 SRC_LOCAL_CAMERA = "local"
 SRC_BOT_CAMERA = "bot"
-SHOW_ANNOTATION = "ShowAnnotation"
+SHOW_ANNOTATION = processsteps.SHOW_ANNOTATION
 
 
 class ProcessStep:
@@ -70,6 +71,7 @@ class ProcessStep:
         "parm_widgets",
         "parm_values",
         "parms_specs",
+        "pipeline_step",
         "point_target",
         "source_im",
         "source_path",
@@ -90,11 +92,7 @@ class ProcessStep:
     python_file_types = (("CvPipeline Python", "*." + python_file_extension),)
     cameraman_file_extension = "cam"
     cameraman_file_types = (("CvPipeline Python", "*." + python_file_extension),)
-    imports = []  # imports for exec or script
-    # imports.append(('__builtins__', __builtins__, None))
-    imports.append(("cv2", cv2, None))
-    imports.append(("np", np, "numpy"))
-    imports.append(("oc", oc, "oc"))
+    imports = list(processsteps.PipelineStep.imports)
     imports.append(("macbookcamera", None, None))
 
     def __init__(self, filter_name=None, where=None, parms={}):
@@ -169,6 +167,7 @@ class ProcessStep:
         self.source_im = None  # captured image
         self.source_path = None
         self.point_target = None
+        self.pipeline_step = processsteps.PipelineStep(parms=self.parm_values, ix=self.ix)
         self.set_filter()
 
     #
@@ -313,9 +312,6 @@ class ProcessStep:
 
     def set_filter(self, filter_name=None, new_parms=None):
         self.save_parameters()
-        if new_parms is not None:
-            for key, value in new_parms.items():
-                self.parm_values[filter_name + "_" + key] = value
         if filter_name is None:
             new_filter_name = self.filter_selection.value()
         else:
@@ -323,19 +319,11 @@ class ProcessStep:
         # print("SetFilter()", new_filter_name,  self.cv_filter_name)
         if new_filter_name != self.cv_filter_name:
             self.filter_selection.replace_value(new_filter_name)
-            self.cv_filter_name = new_filter_name
-            self.cv_specs = image_filters.ImageFilterCollection.image_filters[self.cv_filter_name]
-            self.parms_specs = self.cv_specs.parms
-            if self.cv_specs.annotate_code is not None:
-                annotation_control = False
-                for this in self.parms_specs:
-                    if this.name == SHOW_ANNOTATION:
-                        annotation_control = True
-                        break
-                if not annotation_control:
-                    self.parms_specs.append(
-                        vdata.DataAttribBoolean(SHOW_ANNOTATION, "False")
-                    )
+            self.pipeline_step.parm_values = self.parm_values  # ensure shared
+            self.pipeline_step.configure_filter(new_filter_name, new_parms)
+            self.cv_filter_name = self.pipeline_step.cv_filter_name
+            self.cv_specs = self.pipeline_step.cv_specs
+            self.parms_specs = self.pipeline_step.parms_specs
             for ix, this_widget in enumerate(self.parm_widgets):
                 print(
                     this_widget[0].col,
@@ -348,9 +336,6 @@ class ProcessStep:
                     parms_specs = self.parms_specs[ix]
                     parm_name = self.cv_filter_name + "_" + parms_specs.name
                     parm_caption = parms_specs.caption
-                    parm_default_value = parms_specs.default
-                    if parm_name not in self.parm_values:
-                        self.parm_values[parm_name] = parm_default_value
                     parm_value = self.parm_values[parm_name]
                     if parms_specs.use_slider:
                         slider = this_widget[3]
@@ -381,6 +366,7 @@ class ProcessStep:
 
     @classmethod
     def write_program(cls, py_fn):
+        import codecs
         f = codecs.open(py_fn, "w", encoding="utf-8")
         f.write("\n")
 
@@ -423,115 +409,21 @@ class ProcessStep:
 
     @classmethod
     def write_cameraman(cls, cam_fn):
-        # Writes a snipet of code that will be used for compile/exec in cameraman
-        # All imports will be provided via the global parameter:
-        # 	cv2, oc (oc)
-        # The source image object will be provided in the exec locals object:
-        # 	im_base
-        # The output image in the exec locals object is:
-        # 	display_image
-
-        f = codecs.open(cam_fn, "w", encoding="utf-8")
-
-        f.write("im_in = im_base.copy()\n")
-
-        for ix, this in enumerate(cls.steps[1:]):
-            code_str = this.get_code_str(script=True)
-            f.write(code_str)
-
-        if cls.steps[-1].cv_specs.annotate_code is None:
-            f.write("display_image = im_in\n")
-        else:
-            f.write("display_image = annotated\n")
-
-        f.close()
+        pipeline_steps = [s.pipeline_step for s in cls.steps]
+        processsteps.write_cameraman_file(cam_fn, pipeline_steps)
 
     def get_code_str(self, script=True):
         self.save_parameters()
-        code_substitutions = {}
-        show_annotation = False
-        for this_parm in self.parms_specs:
-            raw_value = self.parm_values[self.cv_filter_name + "_" + this_parm.name]
-            translated_value = this_parm.GetValue(raw_value)
-            code_substitutions[this_parm.name] = translated_value
-            # print("get_code_str() parms", this_parm.name, raw_value, translated_value)
-            if this_parm.name == SHOW_ANNOTATION:
-                show_annotation = translated_value
-        if script:
-            code_substitutions["x_output_annotated"] = "annotated"
-            code_substitutions["x_output_contours"] = "contours_in"
-            code_substitutions["x_output_hierarchy"] = "hierarchy_in"
-            code_substitutions["x_output_hsvspec"] = "hsvspec_in"
-            code_substitutions["x_output_im"] = "im_in"
-            code_substitutions["x_output_objects"] = "objects_in"
-            code_substitutions["x_output_rect"] = "rect_in"
-        else:
-            code_substitutions["x_output_annotated"] = "xstep.exec_annotated"
-            code_substitutions["x_output_contours"] = "xstep.exec_contours"
-            code_substitutions["x_output_hierarchy"] = "xstep.exec_hierarchy"
-            code_substitutions["x_output_hsvspec"] = "xstep.exec_hsvspec"
-            code_substitutions["x_output_im"] = "xstep.exec_im"
-            code_substitutions["x_output_objects"] = "xstep.exec_objects"
-            code_substitutions["x_output_rect"] = "xstep.exec_rect"
-        code = self.cv_specs.code
-        if code[-1:] != "\n":
-            code += "\n"
-        if script and (image_filters.FLAG_ISBASE in self.cv_specs.flags):
-            code += "im_base = im_in\n"
-        if self.cv_specs.annotate_code is not None:
-            if show_annotation:
-                code += "\n" + self.cv_specs.annotate_code
-        if code != "":
-            exec_code_str = code.format(**code_substitutions)
-            return exec_code_str
-        return ""
+        return self.pipeline_step.get_code_str(script=script)
 
     def execute_step(self):
         execution_start = time.time()
-        #
-        # Collect output from prior steps
-        #
-        latest_base_image = None
-        latest_im = None
-        latest_contours = None
-        latest_hierarchy = None
-        latest_hsvspec = None
-        latest_objects = None  # output of object identification filters
-        latest_rect = None
-        for ix, this in enumerate(self.steps):
-            if ix >= self.ix:
-                break
-            if this.exec_im is not None:
-                latest_im = this.exec_im
-                if image_filters.FLAG_ISBASE in this.cv_specs.flags:
-                    latest_base_image = this.exec_im
-            if this.exec_contours is not None:
-                latest_contours = this.exec_contours
-            if this.exec_hierarchy is not None:
-                latest_hierarchy = this.exec_hierarchy
-            if this.exec_hsvspec is not None:
-                latest_hsvspec = this.exec_hsvspec
-            if this.exec_objects is not None:
-                latest_objects = this.exec_objects
-            if this.exec_rect is not None:
-                latest_rect = this.exec_rect
 
-        #
-        # Create environment for this step's execution
-        #
-        exec_global_vars = {}
-        for this in self.imports:
-            if this[1] is not None:
-                exec_global_vars[this[0]] = this[1]
-        exec_global_vars["xstep"] = self
-        exec_global_vars["im_base"] = latest_base_image
-        exec_global_vars["im_in"] = latest_im
-        exec_global_vars["contours_in"] = latest_contours
-        exec_global_vars["hierarchy_in"] = latest_hierarchy
-        exec_global_vars["hsvspec_in"] = latest_hsvspec
-        exec_global_vars["objects_in"] = latest_objects
-        exec_global_vars["rect_in"] = latest_rect
+        # Sync source into the pipeline step
+        self.pipeline_step.source_im = self.source_im
+        self.pipeline_step.source_path = self.source_path
 
+        # Update info widgets from info_data before execution
         for ix, this in enumerate(self.info_widgets):
             if ix < len(self.info_data):
                 try:
@@ -540,7 +432,6 @@ class ProcessStep:
                 except:
                     # tried to execute deleted step
                     print("ExecuteStep()", self.ix, self.tab_title)
-                    # raise
             else:
                 try:
                     this[0].replace_value("")
@@ -549,20 +440,25 @@ class ProcessStep:
                     # tried to execute deleted step
                     print("ExecuteStep()", self.ix, self.tab_title)
 
-        trace = None
-        self.exec_annotated = None
-        self.exec_contours = None
-        self.exec_hierarchy = None
-        self.exec_hsvspec = None
-        self.exec_im = None
-        self.exec_objects = None
-        self.exec_rect = None
-        no_image = (
-            (self.cv_filter_name == image_filters.FILTER_NAME_IMAGE and self.source_im is None)
-            or (self.cv_filter_name != image_filters.FILTER_NAME_IMAGE and latest_im is None)
-        )
-        if no_image:
-            msg = "No image found."
+        # Build the pipeline_steps list for execution
+        pipeline_steps = [s.pipeline_step for s in self.steps]
+
+        # Delegate execution to headless PipelineStep
+        trace, elapsed = self.pipeline_step.execute_step(pipeline_steps)
+
+        # Sync outputs back for any code reading self.exec_* fields
+        self.exec_im = self.pipeline_step.exec_im
+        self.exec_annotated = self.pipeline_step.exec_annotated
+        self.exec_contours = self.pipeline_step.exec_contours
+        self.exec_hierarchy = self.pipeline_step.exec_hierarchy
+        self.exec_hsvspec = self.pipeline_step.exec_hsvspec
+        self.exec_objects = self.pipeline_step.exec_objects
+        self.exec_rect = self.pipeline_step.exec_rect
+        self.info_data = self.pipeline_step.info_data
+
+        # Handle no-image case
+        if trace == "No image found.":
+            msg = trace
             if self.app is not None and self.app.pic_source == SRC_BOT_CAMERA:
                 msg += "\nBot not connected."
             try:
@@ -575,19 +471,7 @@ class ProcessStep:
                 self.app.execution_halted = True
                 self.app.pic_continuous = False
             return
-        exec_code_str = self.get_code_str(script=False)
-        if exec_code_str != "":
-            # print("EXEC", exec_code_str)
-            if "im_in" in exec_global_vars:
-                # print("XXXX-vv", exec_global_vars['im_in'].__class__.__name__)
-                ximin = exec_global_vars["im_in"]
-                # if isinstance(ximin, oc.Image):
-                #    print("XXXX-im", ximin._im.__class__.__name__)
-            try:
-                exec(exec_code_str, exec_global_vars)
-            except:
-                trace = traceback.format_exc()
-                print(trace)
+
         #
         # Step code has been executed, now update step tab to show results.
         #
@@ -612,17 +496,21 @@ class ProcessStep:
         if image_filters.FLAG_SLIDERS in self.cv_specs.flags:
             self.clear_info()
             self.add_info_sliders()
+        # Determine which image to display
+        latest_base_image = None
+        for s in self.steps:
+            if s.ix >= self.ix:
+                break
+            if s.exec_im is not None and image_filters.FLAG_ISBASE in s.cv_specs.flags:
+                latest_base_image = s.exec_im
         if self.exec_annotated is not None:
             step_display_image = self.exec_annotated
         else:
-            # maybe assert an error if there was annotation code which
-            # didn't create an image
             if self.exec_im is None:
                 step_display_image = latest_base_image
             else:
                 step_display_image = self.exec_im
         if step_display_image is not None:
-            # This can happen while steps are being changed
             self.image_widget.update_image(source_im=step_display_image.im)
         self.execution_time.replace_value(
             f"{(time.time() - execution_start) / 1000:f}ms"
@@ -818,68 +706,31 @@ class CvPipeline(vmqtt.VnavsNode):
     # parms you had set. Save/LoadProcessFile keep thse dirty values. There
     # is something to be said to filter the parts based on the current step.
     def load_process_file(self, fn):
-        # load_filter_name, load_parms and load_new_filter_ct are essentially local variables.
-        # They are made instance properties so they can be modified by AssignFilter()
-        self.load_filter_name = None
-        self.load_parms = {}
-        self.load_new_filter_ct = 0
         self.loading = True
-
-        def AssignFilter():
-            # We redefine the existing steps before creating new ones. This is done because if we try to delete all the
-            # existitng tabs, OnTabSelected() creates a default tab as soon as we delete the last one.
-            # This is neater than the options for modifying OnTabSelected() behavior and may be slightly
-            # more efficient.
-            if self.load_filter_name not in image_filters.ImageFilterCollection.image_filters:
-                raise KeyError(self.load_filter_name)
-            self.load_new_filter_ct += 1
-            print("ASSIGN", self.load_filter_name, self.load_new_filter_ct)
-            if self.load_new_filter_ct <= len(ProcessStep.steps):
-                ProcessStep.steps[self.load_new_filter_ct - 1].set_filter(
-                    filter_name=self.load_filter_name, new_parms=self.load_parms
-                )
-            else:
-                ProcessStep(
-                    filter_name=self.load_filter_name,
-                    parms=self.load_parms,
-                    where=self.notebook_add_id,
-                )
-            self.load_filter_name = None
-            self.load_parms = {}
-
-        filter_line_num = 0
         try:
-            f = open(fn, "r")
-            for line_num, ln in enumerate(f, 1):
-                ln = ln.strip()
-                if ln == "":
-                    continue
-                print("LOAD", self.load_filter_name, ln)
-                if ln[0] == "/":
-                    if self.load_filter_name is not None:
-                        AssignFilter()
-                    self.load_filter_name = ln[1:]
-                    filter_line_num = line_num
+            loaded_steps = processsteps.load_cvp_file(fn)
+            for i, lstep in enumerate(loaded_steps):
+                print("ASSIGN", lstep.cv_filter_name, i + 1)
+                if i < len(ProcessStep.steps):
+                    gui_step = ProcessStep.steps[i]
+                    # Merge loaded parm_values into the GUI step's dict
+                    gui_step.parm_values.update(lstep.parm_values)
+                    gui_step.pipeline_step.parm_values = gui_step.parm_values
+                    gui_step.set_filter(filter_name=lstep.cv_filter_name)
                 else:
-                    sep = ln.find("=")
-                    if sep > 0:
-                        key = ln[:sep][5:]  # eliminate "parm." prefix
-                        value = ln[sep + 1 :]
-                        self.load_parms[key] = value
-            if self.load_filter_name is not None:
-                AssignFilter()
-            f.close()
-            while len(ProcessStep.steps) > self.load_new_filter_ct:
-                # The old process had more steps than the current, get rid of the old steps.
+                    ProcessStep(
+                        filter_name=lstep.cv_filter_name,
+                        parms=lstep.parm_values,
+                        where=self.notebook_add_id,
+                    )
+            while len(ProcessStep.steps) > len(loaded_steps):
                 ix = len(ProcessStep.steps) - 1
                 print("XXXX", ix)
                 self.delete_process_step(ix)
-            self.source_widget.replace_value(
-                SRC_LOCAL_CAMERA
-            )  # temporary - needs more options
-            self.step_execution_needed = True
-        except KeyError:
-            msg = f"Unknown filter '{self.load_filter_name}' at line {filter_line_num}"
+            self.pic_continuous = False
+            self.pic_needed = False
+        except KeyError as e:
+            msg = f"Unknown filter {e}"
             print(msg)
             if ProcessStep.steps:
                 ProcessStep.steps[0].deposition.replace_value(msg)
@@ -901,19 +752,18 @@ class CvPipeline(vmqtt.VnavsNode):
             file_types=ProcessStep.process_file_types,
         )
         fn_root, fn_ext = os.path.splitext(cvp_fn)
-        cvp_f = open(cvp_fn, "w")
-        for this_step in ProcessStep.steps:
-            cvp_f.write(f"/{this_step.cv_filter_name}\n")
-            for this_key, this_value in this_step.parm_values.items():
-                cvp_f.write(f"parm.{this_key}={this_value}\n")
-        cvp_f.close()
+        for step in ProcessStep.steps:
+            step.save_parameters()
+        pipeline_steps = [s.pipeline_step for s in ProcessStep.steps]
+        processsteps.save_cvp_file(cvp_fn, pipeline_steps)
         cam_fn = fn_root + "." + ProcessStep.cameraman_file_extension
         py_fn = fn_root + "." + ProcessStep.python_file_extension
-        ProcessStep.write_cameraman(cam_fn)
+        processsteps.write_cameraman_file(cam_fn, pipeline_steps)
         ProcessStep.write_program(py_fn)
 
     def on_capture_image(self):
         print("OnCaptureImage()")
+        self.execution_halted = False
         self.pic_needed = True
         self.pic_continuous = False
         if self.source_widget.value() is None:
@@ -935,9 +785,15 @@ class CvPipeline(vmqtt.VnavsNode):
         self.configure_image_source(path=fn)
 
     def on_select_source(self, *args):
+        if self.local_cam is not None:
+            self.local_cam.release()
+            self.local_cam = None
+        self.pic_continuous = False
+        self.pic_needed = True
         self.pic_source = self.source_widget.value()
         if self.pic_source == SRC_LOCAL_CAMERA:
             self.local_cam = macbookcamera.MacbookCamera()
+            self.configure_camera()
         elif self.pic_source == SRC_BOT_CAMERA:
             self.automatically_connect = True
             self.connect_to_mqtt_server()
