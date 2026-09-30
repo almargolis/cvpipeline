@@ -5,6 +5,7 @@ import sys
 import threading
 import time
 import tkinter
+import tkinter.messagebox
 import traceback
 import types
 
@@ -297,6 +298,16 @@ class ProcessStep:
 
     def new_filter(self, *args):
         # TK callbacks seem to incude *args
+        # Changing filters while the capture loop is running causes state
+        # errors (the executing step sees a half-reconfigured filter).
+        # Block the change and tell the user to switch to single capture.
+        if self.app.pic_continuous:
+            self.filter_selection.replace_value(self.cv_filter_name)
+            tkinter.messagebox.showinfo(
+                "Continuous Mode",
+                "Switch to single capture mode to edit steps.",
+            )
+            return
         self.set_filter()
         self.app.step_execution_needed = True
 
