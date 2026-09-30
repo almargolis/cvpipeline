@@ -487,6 +487,34 @@ def simplest_cb(img, percentile):
     return cv2.merge(out_channels)
 
 
+def clahe(im, clip_limit=2.0, grid_size=8):
+    lab = cv2.cvtColor(im.im_as_bgr(), cv2.COLOR_BGR2Lab)
+    cl = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(grid_size, grid_size))
+    lab[:, :, 0] = cl.apply(lab[:, :, 0])
+    return cv2.cvtColor(lab, cv2.COLOR_Lab2BGR)
+
+
+def lab_channel(im, channel=2):
+    lab = cv2.cvtColor(im.im_as_bgr(), cv2.COLOR_BGR2Lab)
+    return lab[:, :, channel]
+
+
+def flatten(im, flatten_center=150):
+    hsv = im.im_as_hsv()
+    h = hsv[:, :, 0].astype(np.int16)
+    s = hsv[:, :, 1].astype(np.int16)
+    v = hsv[:, :, 2].astype(np.int16)
+    # h = h + (s - flatten_center) + (v - flatten_center)
+    h = h + (v - flatten_center)
+    h = np.clip(h, 0, HSV_MAX_HUE).astype(np.uint8)
+    result = np.empty_like(hsv)
+    result[:, :, 0] = h
+    #result[:, :, 1] = flatten_center
+    result[:, :, 1] = s
+    result[:, :, 2] = flatten_center
+    return result
+
+
 def init_color():
     global color_ix
     color_ix = -1

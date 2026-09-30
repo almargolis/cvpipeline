@@ -315,7 +315,41 @@ ImageFilter(
     flags=[],
 )
 
+ImageFilter(
+    "CLAHE",
+    "{x_output_im} = oc.Image(im=oc.clahe(im_in, clip_limit={clip_limit}, grid_size={grid_size}), colorcode=oc.IM_BGR)",
+    [
+        vdata.DataAttribFloat("clip_limit", "2.0"),
+        vdata.DataAttribInt(
+            "grid_size", "8", min_value=1, max_value=64, use_slider=True
+        ),
+    ],
+    flags=[FLAG_SLIDERS],
+)
+
+ImageFilter(
+    "Flatten",
+    "{x_output_im} = oc.Image(im=oc.flatten(im_in, flatten_center={flatten_center}), colorcode=oc.IM_HSV)",
+    [
+        vdata.DataAttribInt(
+            "flatten_center", "150", min_value=0, max_value=255, use_slider=True
+        ),
+    ],
+    flags=[FLAG_SLIDERS],
+)
+
 ImageFilter("HistogramCB", "oc.histogram_cb(im)", [], flags=[])
+
+ImageFilter(
+    "LABChannel",
+    "{x_output_im} = oc.Image(im=oc.lab_channel(im_in, channel={channel}), colorcode=oc.IM_GRAY)",
+    [
+        vdata.DataAttribInt(
+            "channel", "2", min_value=0, max_value=2, use_slider=True
+        ),
+    ],
+    flags=[FLAG_SLIDERS],
+)
 
 image_filter = ImageFilter(
     FILTER_NAME_ANALYZER,
