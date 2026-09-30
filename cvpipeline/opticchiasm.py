@@ -1304,9 +1304,8 @@ def hough_lines_p(im, min_line_length=30, max_line_gap=10):
         return []
     object_list = []
     if cv_lines is not None:
-        for this in cv_lines:
-            for x1, y1, x2, y2 in this:
-                object_list.append(LineObject(x1, y1, x2, y2))
+        for line in cv_lines.reshape(-1, 4):
+            object_list.append(LineObject(line[0], line[1], line[2], line[3]))
     return object_list
 
 

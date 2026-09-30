@@ -49,6 +49,11 @@ class MacbookCamera:
                 )
             print(msg)
 
+    def release(self):
+        if self._video is not None:
+            self._video.release()
+            self._video = None
+
     @property
     def exposure_speed(self):
         return 0
