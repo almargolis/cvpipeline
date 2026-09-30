@@ -147,6 +147,23 @@ class PipelineStep:
         latest_hsvspec = None
         latest_objects = None
         latest_rect = None
+        #
+        # Search prior steps to find the latest image,
+        # contours, etc. that will be used as the inputs
+        # for the current step. We don't know which inputs
+        # the current step filter needs, so we just collect
+        # whatever we find and have that available.
+        #
+        # At this time, exec_objects is a list of 
+        # optichasm.LineObject() from hough_lines_p().
+        # In the future it could be other things from other
+        # filters (maybe).
+        #
+        # A nice enhancement would be to add the requirements to
+        # the filter descriptions so we can verify what is needed
+        # so we can print a nice specific message instead of
+        # failing and listing a traceback.
+        #
         for ix, this in enumerate(steps):
             if ix >= self.ix:
                 break

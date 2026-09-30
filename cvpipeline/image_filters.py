@@ -30,6 +30,7 @@ FILTER_NAME_ANALYZER = "Analyzer"
 FILTER_NAME_COLORMASK_MULTI = "ColorMaskMulti"
 FILTER_NAME_COLORMASK_SINGLE = "ColorMaskSingle"
 FILTER_NAME_CROPPP = "CropPP"
+FILTER_NAME_HOUGH_LINES_P = "hough_lines_p"
 FILTER_NAME_IMAGE = "Image"
 
 FLAG_ISBASE = "isbase"
@@ -367,7 +368,7 @@ image_filter.annotate_code = (
 )
 
 image_filter = ImageFilter(
-    "HoughLinesP",
+    FILTER_NAME_HOUGH_LINES_P,
     "{x_output_objects} = oc.hough_lines_p(im_in, min_line_length={MinLineLength}, max_line_gap={MaxLineGap})",
     [vdata.DataAttribInt("MinLineLength", "30"), vdata.DataAttribInt("MaxLineGap", 10)],
     flags=[""],
