@@ -119,8 +119,13 @@ class Image:
     def copy_as_gray(self):
         if self.colorcode == IM_GRAY:
             return self.copy()
-        transform = getattr(cv2, "COLOR_{}2{}".format(self.colorcode, IM_GRAY))
-        return Image(im=cv2.cvtColor(self._im, transform), colorcode=IM_GRAY)
+        attr = "COLOR_{}2{}".format(self.colorcode, IM_GRAY)
+        if hasattr(cv2, attr):
+            transform = getattr(cv2, attr)
+            return Image(im=cv2.cvtColor(self._im, transform), colorcode=IM_GRAY)
+        # No direct conversion (e.g. HSV→GRAY); go through BGR first.
+        bgr = self.copy_as_bgr()
+        return bgr.copy_as_gray()
 
     @property
     def im(self):  # im is a property to discourage skipping replace_image()
