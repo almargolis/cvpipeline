@@ -614,7 +614,7 @@ class CvPipeline(vmqtt.VnavsNode):
         self.notebook_add_id = self.notebook.tkw.tabs()[-1]
         self.camera_iso = self.status_frame.add_entry_field("ISO", value=800)
         self.camera_shutter_speed = self.status_frame.add_entry_field(
-            "Shutter Speed", value=10000, row=SAME_ROW, col=NEXT_COL
+            "Shutter Speed", value=1000, row=SAME_ROW, col=NEXT_COL
         )
         self.camera_last_filename = ""
         self.last_pic_payload = None
